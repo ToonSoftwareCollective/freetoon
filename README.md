@@ -1,4 +1,5 @@
 # FreeToon for ToonStore 🚀
+based on the initial development from IerlandFan
 
 > **Breathe new life into your Toon!**  
 > Install and switch to **FreeToon** directly from your stock screen with a single tap. 100% reversible, zero risk.
@@ -61,8 +62,8 @@ Previously, testing or installing FreeToon required SSH commands and terminal kn
 
 Want to go back to the standard interface? It's just as simple:
 
-* **From FreeToon Settings**: Go to `Instellingen` ➔ `Systeem & UI` ➔ `Overschakelen naar standaard UI`.
-* **From the Boot Screen**: Tap `qt-gui` during the 10-second boot picker countdown after a reboot.
+* **From FreeToon Settings**: Go to `Instellingen` ➔ `UI-Modus` ➔ `Naar standaard qt-gui....`.
+
 
 ---
 
