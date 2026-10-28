@@ -1,2 +1,6 @@
+1.0.1
+- removed unused start button from tile
+- write 'freetoon' as preferred gui before restarting
+
 1.0.0
 - initial release

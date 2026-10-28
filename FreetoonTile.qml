@@ -20,20 +20,4 @@ Tile {
 		font.pixelSize: isNxt ? 65 : 50
 		font.family: qfont.regular.name
 	}
-
-	StandardButton {
-		id: freetoonAction
-		width: isNxt ? 275 : 220
-		height: isNxt ? 44 : 35
-		radius: 5
-		text: app.freetoonExists ? "Starten" : "Installeren"
-		fontPixelSize: isNxt ? 25 : 20
-		color: colors.background
-
-		anchors {
-			top: txtFreetoonStatus.bottom
-			topMargin: isNxt ? 25 : 20
-			left: txtFreetoonStatus.left
-		}
-	}
 }

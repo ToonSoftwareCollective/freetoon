@@ -86,7 +86,7 @@ Screen {
 			id: goArea
 			anchors.fill: parent
 			onClicked: {
-				app.writeFile();
+				app.writeFiles();
 				statusLine.visible = true
 				goButton.visible = false				
 			}	

@@ -21,16 +21,26 @@ App {
 		source: "file:///mnt/data/toonui"
  	}
 
+	FileIO {
+		id: ui_choice
+		source: "file:///mnt/data/ui_choice"
+ 	}
+
 	Component.onCompleted: {
 
 		var checkFile = toonui_exists.read();
 		freetoonExists = (checkFile.length > 0)
 	}
 
-	function writeFile() {
-		var f = new XMLHttpRequest();
+	function writeFiles() {
+		var g = new XMLHttpRequest();  //change default UI-choice into freetoon
+		g.open("PUT", "file:///mnt/data/ui_choice");
+		g.send("freetoon");
+
+		var f = new XMLHttpRequest();  //instruct tsc to kickoff the install script
 		f.open("PUT", "file:///tmp/tsc.command");
 		f.send("external-freetoon");
+
 	}
 	
 	function init() {
