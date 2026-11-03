@@ -11,10 +11,8 @@ Screen {
  	}
 
 	Component.onCompleted: {  //recheck current status
-
-		var checkFile = app.toonui_exists.read();
-		app.freetoonExists = (checkFile.length > 0)
-
+		var checkFile = toonui_exists.read();
+		app.freetoonExists = (checkFile.length > 0);
 	}
 
 	screenTitle: "Freetoon"
@@ -64,7 +62,7 @@ Screen {
 	Rectangle {
 		id: goButton
 
-		width: isNxt ? 300 : 240
+		width: isNxt ? 260 : 180
 		height: isNxt ? 64 : 50
 		radius: 6
 		anchors {
@@ -78,7 +76,7 @@ Screen {
 			text: app.freetoonExists ? "Start Freetoon" : "Install Freetoon"
 			font {
 				family: qfont.bold.name
-				pixelSize: isNxt ? 28 : 22
+				pixelSize: isNxt ? 24 : 18
 			}
 		}
 
@@ -87,8 +85,45 @@ Screen {
 			anchors.fill: parent
 			onClicked: {
 				app.writeFiles();
-				statusLine.visible = true
-				goButton.visible = false				
+				statusLine.text = app.freetoonExists ? "Starting Freetoon...... progress in /var/volatile/tmp/switch_to_freetoon.log" : "Installing Freetoon, please wait... progress in /var/volatile/tmp/switch_to_freetoon.log";
+				statusLine.visible = true;
+				goButton.visible = false;
+				uninstallButton.visible = false;
+			}	
+		}
+	}
+
+	Rectangle {
+		id: uninstallButton
+		visible: app.freetoonExists
+
+		width: isNxt ? 260 : 180
+		height: isNxt ? 64 : 50
+		radius: 6
+		anchors {
+			top: goButton.top
+			left: goButton.right
+			leftMargin: isNxt ? 20 : 16
+		}
+		color: colors.clockTileColor
+		Text {
+			anchors.centerIn: parent
+			text: "Uninstall Freetoon"
+			font {
+				family: qfont.bold.name
+				pixelSize: isNxt ? 24 : 18
+			}
+		}
+
+		MouseArea {
+			id: uninstallArea
+			anchors.fill: parent
+			onClicked: {
+				app.uninstallFreeToon();
+				statusLine.text = "Uninstalling Freetoon, please wait... progress in /var/volatile/tmp/switch_to_freetoon.log";
+				statusLine.visible = true;
+				goButton.visible = false;
+				uninstallButton.visible = false;
 			}	
 		}
 	}
@@ -97,10 +132,9 @@ Screen {
 		id: statusLine
 		visible: false
 		anchors {
-			verticalCenter: goButton.verticalCenter
-			left: goButton.left
+			left: headline.left
 			top: goButton.bottom
-			topMargin: isNxt ? 12 : 9
+			topMargin: isNxt ? 16 : 12
 			right: parent.right
 		}
 		font {
@@ -110,6 +144,6 @@ Screen {
 		color: colors.clockTileColor
 
 		wrapMode: Text.WordWrap
-		text: app.freetoonExists ? "Starting Freetoon...... progress in /var/tmp/switch_to_freetoon.log" : "Installing Freetoon, please wait... progress in /var/tmp/switch_to_freetoon.log"
+		text: ""
 	}
 }

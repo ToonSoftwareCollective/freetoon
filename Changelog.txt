@@ -1,3 +1,8 @@
+1.0.2
+- support FreeToon 1.0.0 release
+- add uninstall option to UI and freetoon.sh (preserves .cfg files)
+- improve inittab row handling and intentional restart marker
+
 1.0.1
 - removed unused start button from tile
 - write 'freetoon' as preferred gui before restarting

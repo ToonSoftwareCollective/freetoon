@@ -15,6 +15,7 @@ App {
 	property url thumbnailIcon: "qrc:/tsc/refresh.png"
 	property bool freetoonExists : false
 
+	property alias toonui_exists: toonui_exists
 
 	FileIO {
 		id: toonui_exists
@@ -26,21 +27,46 @@ App {
 		source: "file:///mnt/data/ui_choice"
  	}
 
-	Component.onCompleted: {
+	Timer {
+		id: commandTimer
+		interval: 150
+		repeat: false
+		property string commandText: ""
+		onTriggered: {
+			var f = new XMLHttpRequest();
+			f.open("PUT", "file:///tmp/tsc.command");
+			f.send(commandText);
+		}
+	}
 
+	Component.onCompleted: {
 		var checkFile = toonui_exists.read();
-		freetoonExists = (checkFile.length > 0)
+		freetoonExists = (checkFile.length > 0);
 	}
 
 	function writeFiles() {
-		var g = new XMLHttpRequest();  //change default UI-choice into freetoon
-		g.open("PUT", "file:///mnt/data/ui_choice");
-		g.send("freetoon");
+		try {
+			var g = new XMLHttpRequest();  //change default UI-choice into freetoon
+			g.open("PUT", "file:///mnt/data/ui_choice");
+			g.send("freetoon");
+		} catch (e) {}
 
-		var f = new XMLHttpRequest();  //instruct tsc to kickoff the install script
-		f.open("PUT", "file:///tmp/tsc.command");
-		f.send("external-freetoon");
+		// Decouple command write to /tmp/tsc.command via timer to prevent
+		// concurrent XMLHttpRequest buffer collision and file write race conditions
+		commandTimer.commandText = "external-freetoon\n";
+		commandTimer.restart();
+	}
 
+	function uninstallFreeToon() {
+		try {
+			var a = new XMLHttpRequest();  //write action file for freetoon.sh
+			a.open("PUT", "file:///tmp/freetoon.action");
+			a.send("uninstall");
+		} catch (e) {}
+
+		// Decouple command write to /tmp/tsc.command via timer
+		commandTimer.commandText = "external-freetoon\n";
+		commandTimer.restart();
 	}
 	
 	function init() {
@@ -48,6 +74,3 @@ App {
 		registry.registerWidget("screen", freetoonScreenUrl, this, null, {lazyLoadScreen: true});
 	}
 }
-
-
-
