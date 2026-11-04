@@ -1,3 +1,6 @@
+1.0.3
+- changed welcome text to Dutch
+
 1.0.2
 - support FreeToon 1.0.0 release
 - add uninstall option to UI and freetoon.sh (preserves .cfg files)

@@ -21,19 +21,19 @@ Screen {
 		id: headline
 		anchors {
 			top: parent.top
-			topMargin: isNxt ? 30 : 24
+			topMargin: isNxt ? 20 : 16
 			left: parent.left
-			leftMargin: isNxt ? 60 : 48
+			leftMargin: isNxt ? 35 : 28
 			right: parent.right
 			rightMargin: anchors.leftMargin
 		}
 		color: colors.clockTileColor
 		font {
 			family: qfont.bold.name
-			pixelSize: isNxt ? 35 : 28
+			pixelSize: isNxt ? 30 : 24
 		}
 		wrapMode: Text.WordWrap
-		text: "Freetoon, a fast replacement for the Eneco GUI"
+		text: "Welkom bij Freetoon, een snelle vervanging van de Eneco GUI"
 	}
 
 	Text {
@@ -51,15 +51,15 @@ Screen {
 		lineHeight: 1.15
 		color: colors.clockTileColor
 		wrapMode: Text.WordWrap
-		text: "Freetoon aims to 'free' the Toon from the cloggy Qt/QML interface and " +
-		      "replaces it by a very fast 'C' application with rich functionality.\n" +
-		      "Your current thermostat function will continue to work as is.\n" +
-		      "You can always switch back from Freetoon to this QML interface by " +
-		      "going to the Freetoon settings page and click the 'UI-modus' tile " +
-		      "or by rebooting your Toon and select the Qt-Gui in the select Gui startup menu."
+		text: "Freetoon vervangt de trage Eneco QML appliatie met een snelle nieuwe gebruikers interface.\nMet name een Toon 1 zal veel sneller aanvoelen.\n" +
+		      "De huidige thermostaat functie en het ingestelde programma blijven gewoon actief.\n" +
+		      "Je kan Freetoon gewoon proberen en altijd terug naar de Eneco software via de tegel\n 'UI-Modus' in de Freetoon instellingen " +
+		      "of door de Toon helemaal opnieuw te herstarten en dan 'Qt-Gui' te kiezen in het startup menu.\n" +
+		      "Nadat je Freetoon voor de eerste keer hebt opgestart, ga dan naar instellingen (wieltje rechtsboven) " +
+		      "en kies de tegel 'Scherm' voor algemene instellingen. Via de tegels 'Indeling' and 'Dim-Indeling' kan je de layout van je homescreen en gedimde scherm apart instellen."
 	}
 
-	Rectangle {
+	StandardButton {
 		id: goButton
 
 		width: isNxt ? 260 : 180
@@ -70,7 +70,6 @@ Screen {
 			topMargin: isNxt ? 28 : 22
 			left: headline.left
 		}
-		color: colors.clockTileColor
 		Text {
 			anchors.centerIn: parent
 			text: app.freetoonExists ? "Start Freetoon" : "Install Freetoon"
@@ -80,20 +79,17 @@ Screen {
 			}
 		}
 
-		MouseArea {
-			id: goArea
-			anchors.fill: parent
-			onClicked: {
-				app.writeFiles();
-				statusLine.text = app.freetoonExists ? "Starting Freetoon...... progress in /var/volatile/tmp/switch_to_freetoon.log" : "Installing Freetoon, please wait... progress in /var/volatile/tmp/switch_to_freetoon.log";
-				statusLine.visible = true;
-				goButton.visible = false;
-				uninstallButton.visible = false;
-			}	
-		}
+		onClicked: {
+			app.writeFiles();
+			statusLine.text = app.freetoonExists ? "Starting Freetoon...... progress in /var/volatile/tmp/switch_to_freetoon.log" : "Installing Freetoon, please wait... progress in /var/volatile/tmp/switch_to_freetoon.log";
+			statusLine.visible = true;
+			goButton.visible = false;
+			uninstallButton.visible = false;
+		}	
 	}
 
-	Rectangle {
+	StandardButton {
+
 		id: uninstallButton
 		visible: app.freetoonExists
 
@@ -105,7 +101,7 @@ Screen {
 			left: goButton.right
 			leftMargin: isNxt ? 20 : 16
 		}
-		color: colors.clockTileColor
+
 		Text {
 			anchors.centerIn: parent
 			text: "Uninstall Freetoon"
@@ -115,16 +111,12 @@ Screen {
 			}
 		}
 
-		MouseArea {
-			id: uninstallArea
-			anchors.fill: parent
-			onClicked: {
-				app.uninstallFreeToon();
-				statusLine.text = "Uninstalling Freetoon, please wait... progress in /var/volatile/tmp/switch_to_freetoon.log";
-				statusLine.visible = true;
-				goButton.visible = false;
-				uninstallButton.visible = false;
-			}	
+		onClicked: {
+			app.uninstallFreeToon();
+			statusLine.text = "Uninstalling Freetoon, please wait... progress in /var/volatile/tmp/switch_to_freetoon.log";
+			statusLine.visible = true;
+			goButton.visible = false;
+			uninstallButton.visible = false;
 		}
 	}
 
