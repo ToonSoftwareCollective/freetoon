@@ -1,4 +1,4 @@
-1.0.4
+1.0.5
 - freetoon.sh: all /etc/inittab edits now go through inittab_edit.sh (lock, validation, flash-safe write); script refuses to edit if no engine is available
 - freetoon.sh: always uses the latest install.sh from GitHub instead of the bundled copy
 - freetoon.sh: stock qt-gui row is now commented out intact (was wiped) and restored correctly on uninstall
