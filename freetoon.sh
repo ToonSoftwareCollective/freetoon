@@ -129,6 +129,24 @@ select_engine() {
     fi
 }
 
+# Stop processes by exact name. killall first: pkill does not exist on Toon 1.
+kill_name() {
+    for _n in "$@"; do
+        killall -9 "$_n" 2>/dev/null || pkill -9 -x "$_n" 2>/dev/null || true
+    done
+}
+
+# Kill every process whose command line contains $1 (pkill -f replacement).
+# Skips this script's own process.
+kill_cmdline() {
+    for _d in /proc/[0-9]*; do
+        _p=${_d#/proc/}
+        [ "$_p" = "$$" ] && continue
+        _c=$( { tr '\0' ' ' < "$_d/cmdline"; } 2>/dev/null ) || continue
+        case "$_c" in *"$1"*) kill -9 "$_p" 2>/dev/null || true ;; esac
+    done
+}
+
 # Run one engine command; log and return its status (never edits inittab directly).
 it_edit() {
     if sh "$ENGINE" "$@" >> "$LOG" 2>&1; then
@@ -151,46 +169,80 @@ if [ "$ACTION" = "uninstall" ]; then
 
     select_engine || { log "Uninstall aborted; FreeToon left in place."; exit 1; }
 
-    # 1. Restore stock qt-gui FIRST, so the Toon always has a UI row even if a
-    #    later step fails (a brief overlap with FreeToon is harmless; no UI is not).
-    log "Restoring stock qt-gui in /etc/inittab..."
-    echo "qt-gui" > "$CHOICE_FILE" 2>/dev/null || true
-    it_edit restore_stock_qt || { log "Uninstall aborted; FreeToon left in place."; exit 1; }
+    # Order matters: FreeToon must be completely gone from the screen BEFORE stock
+    # qt-gui starts. Two UIs drawing to the same framebuffer (and toonui's 16bpp
+    # mode under a 32bpp qt-gui on Toon 1) leaves the stock UI garbled.
 
-    # 2. Restore OpenTherm hardware mode if proxy bridge was used (drops qbri itself)
+    # 1. Restore OpenTherm hardware mode if proxy bridge was used (drops qbri itself).
+    #    Slow (~20 s); done while FreeToon is still on screen.
     if [ -x /mnt/data/ot_mode_switch.sh ]; then
         log "Restoring stock OpenTherm mode..."
         /mnt/data/ot_mode_switch.sh off >> "$LOG" 2>&1 || true
     fi
 
-    # 3. Drop FreeToon-specific inittab rows (only those present)
+    # 2. Remove the FreeToon UI row; init stops ui_launcher/toonui. If this fails
+    #    nothing has changed yet, so abort with FreeToon still working.
+    if grep -q "^toon:" /etc/inittab 2>/dev/null; then
+        log "Removing toon row from /etc/inittab..."
+        it_edit drop toon || { log "Uninstall aborted; FreeToon left in place."; exit 1; }
+    fi
+
+    # 3. Drop the other FreeToon rows (only those present)
     log "Dropping FreeToon inittab entries..."
-    for _id in toon vncs p1br qbri tuih; do
+    for _id in vncs p1br qbri tuih; do
         if grep -q "^${_id}:" /etc/inittab 2>/dev/null; then
             log "Removing ${_id} row from /etc/inittab..."
             it_edit drop "$_id" || true
         fi
     done
 
-    pkill -9 -x quby_bridge 2>/dev/null || true
-    pkill -9 -x p1bridge 2>/dev/null || true
-    umount -l /dev/ttymxc0 2>/dev/null || true
+    # 3b. Drop marketplace integration rows: every active row whose command runs
+    #     from /mnt/data/integrations/. drop_safe only removes a row if it really
+    #     points there, so stock rows can never be hit.
+    INTEG_DIR="/mnt/data/integrations/"
+    for _id in $(grep -v '^#' /etc/inittab 2>/dev/null | grep -F "$INTEG_DIR" | cut -d: -f1); do
+        [ -n "$_id" ] || continue
+        log "Removing integration row ${_id} from /etc/inittab..."
+        it_edit drop_safe "$_id" "$INTEG_DIR" || true
+    done
 
-    # 4. Toon 1 framebuffer: i.MX27 LCDC is 16bpp for both FreeToon and stock qt-gui
-    if [ "$IS_TOON1" = 1 ] && have fbset; then
-        fbset -fb /dev/fb0 -depth 16 2>/dev/null || true
+    # 4. Stop FreeToon processes and wait until toonui has really released the screen
+    log "Stopping FreeToon processes..."
+    kill_cmdline /mnt/data/ui_launcher.sh
+    kill_cmdline /mnt/data/toon_wasm_host.sh
+    kill_cmdline /mnt/data/integrations/
+    kill_name toonui x11vnc wastefetch quby_bridge p1bridge
+    umount -l /dev/ttymxc0 2>/dev/null || true
+    _w=0
+    while pidof toonui >/dev/null 2>&1 && [ "$_w" -lt 10 ]; do
+        killall -9 toonui 2>/dev/null || true
+        sleep 1; _w=$((_w + 1))
+    done
+    pidof toonui >/dev/null 2>&1 && log "WARNING: toonui still running after 10 s"
+
+    # 5. Toon 1: toonui switched the framebuffers to 16bpp (RGB565); stock qt-gui
+    #    runs at 32bpp. Put both planes back before qt-gui starts. (fbset is not
+    #    installed on every Toon 1, so use sysfs.)
+    if [ "$IS_TOON1" = 1 ]; then
+        for _fb in /sys/class/graphics/fb0 /sys/class/graphics/fb1; do
+            [ -w "$_fb/bits_per_pixel" ] || continue
+            if [ "$(cat "$_fb/bits_per_pixel" 2>/dev/null)" != "32" ]; then
+                log "Restoring ${_fb##*/} to 32bpp for stock qt-gui..."
+                echo 32 > "$_fb/bits_per_pixel" 2>/dev/null || log "WARNING: could not set ${_fb##*/} to 32bpp"
+            fi
+        done
     fi
 
-    # 5. Stop FreeToon processes
-    log "Stopping FreeToon processes..."
-    killall -9 toonui 2>/dev/null || true
-    pkill -9 -x toonui 2>/dev/null || true
-    pkill -9 -x x11vnc 2>/dev/null || true
-    pkill -9 -x wastefetch 2>/dev/null || true
-    pkill -9 -f /mnt/data/ui_launcher.sh 2>/dev/null || true
-    pkill -9 -f /mnt/data/toon_wasm_host.sh 2>/dev/null || true
+    # 6. Now bring back stock qt-gui. If that fails, put FreeToon back so the
+    #    Toon is never left without any UI.
+    log "Restoring stock qt-gui in /etc/inittab..."
+    if ! it_edit restore_stock_qt; then
+        log "ERROR: could not restore stock qt-gui; re-enabling FreeToon so the Toon keeps a UI."
+        it_edit upsert toon "$TOON_ROW" || log "CRITICAL: no UI row could be restored - check /etc/inittab via SSH."
+        exit 1
+    fi
 
-    # 6. Remove FreeToon binaries and scripts (PRESERVING *.cfg files!)
+    # 7. Remove FreeToon binaries and scripts (PRESERVING *.cfg files!)
     #    Only remove binaries whose inittab rows are really gone.
     if grep -qE '^(toon|vncs|p1br|qbri|tuih):' /etc/inittab 2>/dev/null; then
         log "WARNING: some FreeToon inittab rows could not be removed; keeping binaries so they do not respawn-loop."
@@ -214,11 +266,22 @@ if [ "$ACTION" = "uninstall" ]; then
         rm -rf /mnt/data/pwa /mnt/data/x11vnc-bundle 2>/dev/null || true
     fi
 
+    # 7b. Remove marketplace integrations, but only if none of their inittab rows
+    #     are left (otherwise init would respawn-loop on a deleted binary).
+    if grep -v '^#' /etc/inittab 2>/dev/null | grep -qF "/mnt/data/integrations/"; then
+        log "WARNING: some integration inittab rows could not be removed; keeping /mnt/data/integrations."
+    elif [ -d /mnt/data/integrations ]; then
+        log "Removing marketplace integrations..."
+        rm -rf /mnt/data/integrations 2>/dev/null || true
+        rm -f /var/volatile/tmp/integration-*.log /var/volatile/tmp/integration_install.log \
+              /var/volatile/tmp/integ-install.log 2>/dev/null || true
+    fi
+
     # Clean runtime logs/state (keep switch log for review)
     rm -f /var/volatile/tmp/toonui* /var/volatile/tmp/ui_launcher.log 2>/dev/null || true
     rm -f /tmp/freetoon* /var/volatile/tmp/freetoon* "$ENGINE_TMP" 2>/dev/null || true
 
-    # 7. Make sure init has the final inittab and stock Qt runs
+    # 8. Make sure init has the final inittab and stock Qt runs
     kill -HUP 1 2>/dev/null || telinit q 2>/dev/null || true
     sleep 1
     if ! pidof qt-gui >/dev/null 2>&1 && ! pidof startqt >/dev/null 2>&1; then
@@ -311,10 +374,7 @@ sleep 1
 # Check if stock Qt processes are still lingering and terminate them
 if pidof qt-gui >/dev/null 2>&1 || pidof startqt >/dev/null 2>&1; then
     log "Stopping lingering stock qt-gui processes..."
-    killall -9 qt-gui 2>/dev/null || true
-    pkill -9 -x qt-gui 2>/dev/null || true
-    pkill -9 -f /qmf/sbin/qt-gui 2>/dev/null || true
-    pkill -9 -x startqt 2>/dev/null || true
+    kill_name qt-gui startqt
     kill -HUP 1 2>/dev/null || telinit q 2>/dev/null || true
 fi
 

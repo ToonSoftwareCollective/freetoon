@@ -1,6 +1,10 @@
 1.0.4
 - freetoon.sh: all /etc/inittab edits now go through inittab_edit.sh (lock, validation, flash-safe write); script refuses to edit if no engine is available
 - freetoon.sh: always uses the latest install.sh from GitHub instead of the bundled copy
+- freetoon.sh: stock qt-gui row is now commented out intact (was wiped) and restored correctly on uninstall
+- freetoon.sh: uninstall stops FreeToon completely and restores 32bpp before stock qt-gui starts (fixes garbled screen); FreeToon is re-enabled if restoring stock qt-gui fails
+- freetoon.sh: uninstall also removes marketplace integrations (inittab rows + /mnt/data/integrations)
+- freetoon.sh: Toon 1 shell compatibility (no "command -v")
 
 1.0.3
 - changed welcome text to Dutch
