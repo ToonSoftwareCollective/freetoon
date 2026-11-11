@@ -81,7 +81,7 @@ Screen {
 
 		onClicked: {
 			app.writeFiles();
-			statusLine.text = app.freetoonExists ? "Starting Freetoon...... progress in /var/volatile/tmp/switch_to_freetoon.log" : "Installing Freetoon, please wait... progress in /var/volatile/tmp/switch_to_freetoon.log";
+			statusLine.text = app.freetoonExists ? "Freetoon wordt gestart... voortgang via 'Bekijk log'." : "Freetoon wordt geinstalleerd, even geduld... voortgang via 'Bekijk log'.";
 			statusLine.visible = true;
 			goButton.visible = false;
 			uninstallButton.visible = false;
@@ -113,7 +113,7 @@ Screen {
 
 		onClicked: {
 			app.uninstallFreeToon();
-			statusLine.text = "Uninstalling Freetoon, please wait... progress in /var/volatile/tmp/switch_to_freetoon.log";
+			statusLine.text = "Freetoon wordt verwijderd, even geduld... voortgang via 'Bekijk log'.";
 			statusLine.visible = true;
 			goButton.visible = false;
 			uninstallButton.visible = false;
@@ -137,5 +137,155 @@ Screen {
 
 		wrapMode: Text.WordWrap
 		text: ""
+	}
+
+	// ---- Log viewer --------------------------------------------------------
+	// Stays visible after Install/Start/Uninstall so the progress can be followed,
+	// and after a reboot to see why the switch failed (the log is on flash).
+
+	property string logSource: "switch"     // "switch" | "launcher"
+
+	StandardButton {
+		id: logButton
+
+		width: isNxt ? 200 : 150
+		height: isNxt ? 64 : 50
+		radius: 6
+		anchors {
+			top: goButton.top
+			right: headline.right
+		}
+		Text {
+			anchors.centerIn: parent
+			text: "Bekijk log"
+			font {
+				family: qfont.bold.name
+				pixelSize: isNxt ? 24 : 18
+			}
+		}
+		onClicked: {
+			logSource = "switch";
+			refreshLog();
+			logPanel.visible = true;
+		}
+	}
+
+	function refreshLog() {
+		logText.text = app.readLog(logSource, 300);
+		// keep the newest lines in view
+		logFlick.contentY = Math.max(0, logText.paintedHeight - logFlick.height);
+	}
+
+	Timer {
+		id: logTimer
+		interval: 2000
+		repeat: true
+		running: logPanel.visible
+		onTriggered: {
+			var atBottom = logFlick.contentY >= logText.paintedHeight - logFlick.height - 20;
+			logText.text = app.readLog(logSource, 300);
+			if (atBottom)       // don't yank the view away while someone scrolls back
+				logFlick.contentY = Math.max(0, logText.paintedHeight - logFlick.height);
+		}
+	}
+
+	Rectangle {
+		id: logPanel
+		visible: false
+		z: 10
+		color: "#ffffff"
+		border.color: "#b0b0b0"
+		border.width: 1
+		radius: 6
+		anchors {
+			top: parent.top
+			topMargin: isNxt ? 10 : 8
+			bottom: parent.bottom
+			bottomMargin: isNxt ? 10 : 8
+			left: headline.left
+			right: headline.right
+		}
+
+		Row {
+			id: logTabs
+			spacing: isNxt ? 12 : 10
+			anchors {
+				top: parent.top
+				topMargin: isNxt ? 10 : 8
+				left: parent.left
+				leftMargin: isNxt ? 10 : 8
+			}
+
+			StandardButton {
+				width: isNxt ? 230 : 175
+				height: isNxt ? 50 : 40
+				radius: 6
+				Text {
+					anchors.centerIn: parent
+					text: (logSource === "switch" ? "> " : "") + "Installatie-log"
+					font { family: qfont.bold.name; pixelSize: isNxt ? 20 : 16 }
+				}
+				onClicked: { logSource = "switch"; refreshLog(); }
+			}
+			StandardButton {
+				width: isNxt ? 230 : 175
+				height: isNxt ? 50 : 40
+				radius: 6
+				Text {
+					anchors.centerIn: parent
+					text: (logSource === "launcher" ? "> " : "") + "Launcher-log"
+					font { family: qfont.bold.name; pixelSize: isNxt ? 20 : 16 }
+				}
+				onClicked: { logSource = "launcher"; refreshLog(); }
+			}
+		}
+
+		StandardButton {
+			id: logClose
+			width: isNxt ? 140 : 110
+			height: isNxt ? 50 : 40
+			radius: 6
+			anchors {
+				top: logTabs.top
+				right: parent.right
+				rightMargin: isNxt ? 10 : 8
+			}
+			Text {
+				anchors.centerIn: parent
+				text: "Sluiten"
+				font { family: qfont.bold.name; pixelSize: isNxt ? 20 : 16 }
+			}
+			onClicked: logPanel.visible = false
+		}
+
+		Flickable {
+			id: logFlick
+			clip: true
+			anchors {
+				top: logTabs.bottom
+				topMargin: isNxt ? 10 : 8
+				bottom: parent.bottom
+				bottomMargin: isNxt ? 10 : 8
+				left: parent.left
+				leftMargin: isNxt ? 12 : 10
+				right: parent.right
+				rightMargin: isNxt ? 12 : 10
+			}
+			contentWidth: width
+			contentHeight: logText.paintedHeight
+			flickableDirection: Flickable.VerticalFlick
+
+			Text {
+				id: logText
+				width: logFlick.width
+				wrapMode: Text.WrapAnywhere
+				color: "#202020"
+				font {
+					family: qfont.regular.name
+					pixelSize: isNxt ? 15 : 12
+				}
+				text: ""
+			}
+		}
 	}
 }

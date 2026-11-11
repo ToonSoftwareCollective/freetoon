@@ -30,8 +30,25 @@ if [ "${SWITCH_DETACHED:-0}" != "1" ]; then
     fi
 fi
 
-LOG="/var/volatile/tmp/switch_to_freetoon.log"
 mkdir -p /var/volatile/tmp 2>/dev/null || true
+# The log lives on flash so it survives the reboot that often follows a failed
+# switch ("after restart the old GUI came back"); /var/volatile is RAM. The old
+# volatile path stays as a symlink for anyone told to look there. Capped at
+# ~100 KB (last 300 lines kept) so it can't grow on the small UBIFS rootfs.
+VLOG="/var/volatile/tmp/switch_to_freetoon.log"
+LOG="/mnt/data/switch_to_freetoon.log"
+if touch "$LOG" 2>/dev/null; then
+    if [ -f "$VLOG" ] && [ ! -L "$VLOG" ]; then
+        cat "$VLOG" >> "$LOG" 2>/dev/null || true      # keep this boot's earlier lines
+        rm -f "$VLOG" 2>/dev/null || true
+    fi
+    [ -L "$VLOG" ] || ln -s "$LOG" "$VLOG" 2>/dev/null || true
+    if [ "$(wc -c < "$LOG" 2>/dev/null || echo 0)" -gt 102400 ]; then
+        tail -n 300 "$LOG" > "$LOG.tmp" 2>/dev/null && mv -f "$LOG.tmp" "$LOG" || rm -f "$LOG.tmp"
+    fi
+else
+    LOG="$VLOG"                                         # read-only /mnt/data: RAM only
+fi
 
 log() {
     _msg="[$(date '+%Y-%m-%d %H:%M:%S')] [freetoon] $*"

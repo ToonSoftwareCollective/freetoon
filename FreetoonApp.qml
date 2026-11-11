@@ -27,6 +27,52 @@ App {
 		source: "file:///mnt/data/ui_choice"
  	}
 
+	// Logs for the "Bekijk log" view. freetoon.sh >= 1.0.6 keeps the switch log on
+	// flash (survives a reboot); older versions only wrote the RAM copy.
+	FileIO {
+		id: switchLogFlash
+		source: "file:///mnt/data/switch_to_freetoon.log"
+	}
+	FileIO {
+		id: switchLogRam
+		source: "file:///var/volatile/tmp/switch_to_freetoon.log"
+	}
+	FileIO {
+		id: launcherLog
+		source: "file:///var/volatile/tmp/ui_launcher.log"
+	}
+
+	function safeRead(fileIO) {
+		try {
+			var t = fileIO.read();
+			return t ? String(t) : "";
+		} catch (e) {
+			return "";
+		}
+	}
+
+	// Last `maxLines` lines of the chosen log ("switch" or "launcher").
+	function readLog(which, maxLines) {
+		var txt;
+		if (which === "launcher") {
+			txt = safeRead(launcherLog);
+			if (txt.length === 0)
+				return "Geen launcher-log gevonden (/var/volatile/tmp/ui_launcher.log).\n" +
+				       "Deze log bestaat alleen als Freetoon sinds de laatste herstart is opgestart.";
+		} else {
+			txt = safeRead(switchLogFlash);
+			if (txt.length === 0)
+				txt = safeRead(switchLogRam);
+			if (txt.length === 0)
+				return "Nog geen installatie-log gevonden.\n" +
+				       "Druk op 'Install Freetoon' of 'Start Freetoon'; de voortgang verschijnt dan hier.";
+		}
+		var lines = txt.split("\n");
+		if (lines.length > maxLines)
+			lines = lines.slice(lines.length - maxLines);
+		return lines.join("\n");
+	}
+
 	Timer {
 		id: commandTimer
 		interval: 150

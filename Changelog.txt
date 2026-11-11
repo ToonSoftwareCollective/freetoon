@@ -1,3 +1,8 @@
+1.0.6
+- new "Bekijk log" button: shows the install/switch log (and the launcher log) on the Toon itself, refreshed every 2 s while open
+- freetoon.sh: switch log now kept on flash (/mnt/data/switch_to_freetoon.log, max ~100 KB) so it survives a reboot; /var/volatile/tmp/switch_to_freetoon.log is a link to it
+- status texts point to the log button and are in Dutch
+
 1.0.5
 - freetoon.sh: all /etc/inittab edits now go through inittab_edit.sh (lock, validation, flash-safe write); script refuses to edit if no engine is available
 - freetoon.sh: always uses the latest install.sh from GitHub instead of the bundled copy
