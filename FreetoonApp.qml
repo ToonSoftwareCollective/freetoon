@@ -41,6 +41,11 @@ App {
 		id: launcherLog
 		source: "file:///var/volatile/tmp/ui_launcher.log"
 	}
+	// TSC's command file, shared by all ToonStore apps.
+	FileIO {
+		id: tscCommand
+		source: "file:///var/volatile/tmp/tsc.command"
+	}
 
 	function safeRead(fileIO) {
 		try {
@@ -51,7 +56,16 @@ App {
 		}
 	}
 
+	function switchLogText() {
+		var txt = safeRead(switchLogFlash);
+		if (txt.length === 0)
+			txt = safeRead(switchLogRam);
+		return txt;
+	}
+
 	// Last `maxLines` lines of the chosen log ("switch" or "launcher").
+	// After Start/Install/Uninstall the switch log shows only the current run,
+	// so an old "launch initiated successfully" can't be mistaken for this one.
 	function readLog(which, maxLines) {
 		var txt;
 		if (which === "launcher") {
@@ -60,9 +74,14 @@ App {
 				return "Geen launcher-log gevonden (/var/volatile/tmp/ui_launcher.log).\n" +
 				       "Deze log bestaat alleen als Freetoon sinds de laatste herstart is opgestart.";
 		} else {
-			txt = safeRead(switchLogFlash);
-			if (txt.length === 0)
-				txt = safeRead(switchLogRam);
+			txt = switchLogText();
+			if (actionKind !== "") {
+				if (!scriptStarted())
+					return "Wachten tot ToonStore (TSC) het Freetoon-script start...\n\n" + actionStatus;
+				var i = txt.lastIndexOf(markerText);
+				if (i >= 0)
+					txt = txt.substring(txt.lastIndexOf("\n", i) + 1);
+			}
 			if (txt.length === 0)
 				return "Nog geen installatie-log gevonden.\n" +
 				       "Druk op 'Install Freetoon' of 'Start Freetoon'; de voortgang verschijnt dan hier.";
@@ -73,46 +92,134 @@ App {
 		return lines.join("\n");
 	}
 
-	Timer {
-		id: commandTimer
-		interval: 150
-		repeat: false
-		property string commandText: ""
-		onTriggered: {
-			var f = new XMLHttpRequest();
-			f.open("PUT", "file:///tmp/tsc.command");
-			f.send(commandText);
-		}
-	}
-
 	Component.onCompleted: {
 		var checkFile = toonui_exists.read();
 		freetoonExists = (checkFile.length > 0);
 	}
 
-	function writeFiles() {
-		try {
-			var g = new XMLHttpRequest();  //change default UI-choice into freetoon
-			g.open("PUT", "file:///mnt/data/ui_choice");
-			g.send("freetoon");
-		} catch (e) {}
+	// ---- Start / Install / Uninstall via TSC, with a watchdog ---------------
+	// The button can't run freetoon.sh itself: it writes "external-freetoon" to
+	// /var/volatile/tmp/tsc.command (= TSC's /tmp/tsc.command; /tmp is a symlink
+	// that is broken on some Toons, so never use /tmp) and TSC runs the script
+	// on its next round. TSC deletes
+	// that file after EVERY command it handles, so a request written while TSC
+	// is busy with another app's command (seen: a PostNL login of ~47 s) is
+	// thrown away and nothing happens. The watchdog below checks that the
+	// script really started (a new "Starting FreeToon" line in the switch log)
+	// and offers the command again if it was lost.
+	property string markerText: "[freetoon] Starting FreeToon"
+	property string actionKind: ""        // "", "start", "install", "uninstall"
+	property string actionStatus: ""
+	property bool actionBusy: false        // waiting for the script to start
+	property bool actionFailed: false      // gave up: buttons come back
+	property string markerBefore: ""       // last start line before the press
+	property bool needWrite: false         // command still to be written
+	property int watchTicks: 0
+	property int goneTicks: 0
+	property int attempts: 0
 
-		// Decouple command write to /tmp/tsc.command via timer to prevent
-		// concurrent XMLHttpRequest buffer collision and file write race conditions
-		commandTimer.commandText = "external-freetoon\n";
-		commandTimer.restart();
+	// Full log line (with timestamp) of the last "Starting FreeToon ..." entry.
+	function lastStartMarker(txt) {
+		var i = txt.lastIndexOf(markerText);
+		if (i < 0)
+			return "";
+		var e = txt.indexOf("\n", i);
+		return txt.substring(txt.lastIndexOf("\n", i) + 1, e < 0 ? txt.length : e);
 	}
 
-	function uninstallFreeToon() {
-		try {
-			var a = new XMLHttpRequest();  //write action file for freetoon.sh
-			a.open("PUT", "file:///tmp/freetoon.action");
-			a.send("uninstall");
-		} catch (e) {}
+	function scriptStarted() {
+		var m = lastStartMarker(switchLogText());
+		return m.length > 0 && m !== markerBefore;
+	}
 
-		// Decouple command write to /tmp/tsc.command via timer
-		commandTimer.commandText = "external-freetoon\n";
-		commandTimer.restart();
+	function actionLabel() {
+		if (actionKind === "uninstall") return "Freetoon wordt verwijderd.";
+		if (actionKind === "install")   return "Freetoon wordt geinstalleerd.";
+		return "Freetoon wordt gestart.";
+	}
+
+	// Write the command, but only into an empty command file: another app's
+	// pending command (e.g. PostNL) is never overwritten.
+	function writeCommand() {
+		if (safeRead(tscCommand).replace(/\s/g, "").length > 0) {
+			needWrite = true;
+			return;
+		}
+		needWrite = false;
+		attempts++;
+		try {
+			if (actionKind === "uninstall") {
+				var a = new XMLHttpRequest();  // action file for freetoon.sh
+				a.open("PUT", "file:///var/volatile/tmp/freetoon.action");
+				a.send("uninstall");
+			}
+			var f = new XMLHttpRequest();
+			f.open("PUT", "file:///var/volatile/tmp/tsc.command");
+			f.send("external-freetoon\n");
+		} catch (e) {}
+	}
+
+	function beginAction(kind) {
+		actionKind = kind;
+		actionFailed = false;
+		actionBusy = true;
+		markerBefore = lastStartMarker(switchLogText());
+		watchTicks = 0;
+		goneTicks = 0;
+		attempts = 0;
+		if (kind !== "uninstall") {
+			try {
+				var g = new XMLHttpRequest();  // default UI choice -> freetoon
+				g.open("PUT", "file:///mnt/data/ui_choice");
+				g.send("freetoon");
+			} catch (e) {}
+		}
+		actionStatus = actionLabel() + " Wachten tot ToonStore (TSC) het script start...";
+		writeCommand();
+		watchTimer.restart();
+	}
+
+	Timer {
+		id: watchTimer
+		interval: 5000          // TSC handles its command file every ~5 s when idle
+		repeat: true
+		onTriggered: {
+			watchTicks++;
+			if (scriptStarted()) {
+				stop();
+				actionBusy = false;
+				actionStatus = actionLabel() + " Het script draait; volg de voortgang via 'Bekijk log'.";
+				return;
+			}
+			var cmd = safeRead(tscCommand);
+			if (cmd.indexOf("external-freetoon") >= 0) {
+				goneTicks = 0;          // still queued: TSC is busy with something else
+			} else if (cmd.replace(/\s/g, "").length > 0) {
+				goneTicks = 0;          // another app's command waits: don't touch it
+				needWrite = true;
+			} else if (needWrite) {
+				writeCommand();         // file free again: our first/next write
+			} else {
+				// Gone without a start line. TSC starts the script before it deletes
+				// the file, so give it one more round before offering it again.
+				goneTicks++;
+				if (goneTicks >= 2) {
+					goneTicks = 0;
+					writeCommand();
+					console.log("[freetoon] tsc.command was dropped; offered again (attempt " + attempts + ")");
+				}
+			}
+			if (watchTicks >= 36) {     // 3 minutes
+				stop();
+				actionBusy = false;
+				actionFailed = true;
+				actionStatus = "ToonStore (TSC) heeft het Freetoon-script na 3 minuten nog niet gestart. " +
+				               "Probeer het opnieuw; blijft dit gebeuren, herstart dan de Toon.";
+				return;
+			}
+			actionStatus = actionLabel() + " Wachten tot ToonStore (TSC) het script start... (" +
+			               (watchTicks * 5) + " s" + (attempts > 1 ? ", opnieuw aangeboden" : "") + ")";
+		}
 	}
 	
 	function init() {
