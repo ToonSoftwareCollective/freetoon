@@ -61,6 +61,8 @@ Screen {
 
 	StandardButton {
 		id: goButton
+		// hidden while a request runs; back when TSC never started the script
+		visible: app.actionKind === "" || app.actionFailed
 
 		width: isNxt ? 260 : 180
 		height: isNxt ? 64 : 50
@@ -79,19 +81,13 @@ Screen {
 			}
 		}
 
-		onClicked: {
-			app.writeFiles();
-			statusLine.text = app.freetoonExists ? "Freetoon wordt gestart... voortgang via 'Bekijk log'." : "Freetoon wordt geinstalleerd, even geduld... voortgang via 'Bekijk log'.";
-			statusLine.visible = true;
-			goButton.visible = false;
-			uninstallButton.visible = false;
-		}	
+		onClicked: app.beginAction(app.freetoonExists ? "start" : "install")
 	}
 
 	StandardButton {
 
 		id: uninstallButton
-		visible: app.freetoonExists
+		visible: app.freetoonExists && (app.actionKind === "" || app.actionFailed)
 
 		width: isNxt ? 260 : 180
 		height: isNxt ? 64 : 50
@@ -111,18 +107,12 @@ Screen {
 			}
 		}
 
-		onClicked: {
-			app.uninstallFreeToon();
-			statusLine.text = "Freetoon wordt verwijderd, even geduld... voortgang via 'Bekijk log'.";
-			statusLine.visible = true;
-			goButton.visible = false;
-			uninstallButton.visible = false;
-		}
+		onClicked: app.beginAction("uninstall")
 	}
 
 	Text {
 		id: statusLine
-		visible: false
+		visible: text.length > 0
 		anchors {
 			left: headline.left
 			top: goButton.bottom
@@ -136,7 +126,7 @@ Screen {
 		color: colors.clockTileColor
 
 		wrapMode: Text.WordWrap
-		text: ""
+		text: app.actionStatus      // follows the TSC watchdog in FreetoonApp.qml
 	}
 
 	// ---- Log viewer --------------------------------------------------------
