@@ -1,3 +1,8 @@
+1.0.8
+- Start/Install/Uninstall write the command to /tmp/tsc.command again, the only path TSC reads (ToonStore, tscSettings and PostNL use it too). 1.0.7 wrote /var/volatile/tmp/tsc.command, which is the same file only when /tmp links to /var/volatile/tmp; where /tmp is a plain directory the request never reached TSC and the app gave up after 3 minutes
+- after such a time-out, 'Bekijk log' shows a diagnosis: whether the command is still waiting, a stray copy in /var/volatile/tmp, and the last lines of /var/log/tsc
+- the uninstall action file is written to /tmp and /var/volatile/tmp (freetoon.sh reads both)
+
 1.0.7
 - Start/Install/Uninstall now check that ToonStore (TSC) really ran the Freetoon script: TSC deletes its command file after every command, so a press during another app's command (e.g. a PostNL login) was lost and nothing happened. The app now waits, shows "Wachten tot ToonStore (TSC) het script start...", offers the command again when it was dropped (never overwriting another app's pending command) and gives up after 3 minutes with a message, showing the buttons again
 - "Bekijk log" shows only the current run after a press, so an old "launch initiated successfully" can no longer be mistaken for the current one

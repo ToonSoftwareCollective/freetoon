@@ -41,10 +41,23 @@ App {
 		id: launcherLog
 		source: "file:///var/volatile/tmp/ui_launcher.log"
 	}
-	// TSC's command file, shared by all ToonStore apps.
+	// TSC's command file, shared by all ToonStore apps. TSC reads exactly this
+	// path (COMMANDFILE=/tmp/tsc.command in /usr/bin/tsc), as do ToonStore,
+	// tscSettings and PostNL. 1.0.7 used /var/volatile/tmp/tsc.command, which is
+	// only the same file when /tmp links to /var/volatile/tmp; on a Toon where
+	// /tmp is a plain directory the command never reached TSC.
 	FileIO {
 		id: tscCommand
+		source: "file:///tmp/tsc.command"
+	}
+	// For the diagnosis after a failed start: the copy 1.0.7 wrote, and TSC's log.
+	FileIO {
+		id: tscCommandVolatile
 		source: "file:///var/volatile/tmp/tsc.command"
+	}
+	FileIO {
+		id: tscLog
+		source: "file:///var/log/tsc"
 	}
 
 	function safeRead(fileIO) {
@@ -76,6 +89,8 @@ App {
 		} else {
 			txt = switchLogText();
 			if (actionKind !== "") {
+				if (!scriptStarted() && actionFailed)
+					return actionStatus + "\n\n" + tscDiagnosis();
 				if (!scriptStarted())
 					return "Wachten tot ToonStore (TSC) het Freetoon-script start...\n\n" + actionStatus;
 				var i = txt.lastIndexOf(markerText);
@@ -92,6 +107,25 @@ App {
 		return lines.join("\n");
 	}
 
+	// Shown under "Bekijk log" when TSC never started the script: is the command
+	// still waiting (TSC hangs, or reads another /tmp), and what did TSC log?
+	function tscDiagnosis() {
+		var cmd = safeRead(tscCommand).replace(/\s+$/, "");
+		var vol = safeRead(tscCommandVolatile).replace(/\s+$/, "");
+		var d = "Diagnose:\n";
+		d += "- /tmp/tsc.command: " + (cmd.length ? "bevat nog '" + cmd + "' (TSC heeft het niet opgepakt)" : "leeg of afwezig") + "\n";
+		if (vol.length && vol !== cmd)
+			d += "- /var/volatile/tmp/tsc.command: bevat '" + vol + "' (/tmp is hier een andere map dan /var/volatile/tmp)\n";
+		var lines = safeRead(tscLog).split("\n");
+		while (lines.length && lines[lines.length - 1] === "")
+			lines.pop();
+		if (lines.length === 0)
+			d += "- /var/log/tsc: leeg of afwezig (draait TSC wel?)\n";
+		else
+			d += "- laatste regels van /var/log/tsc:\n" + lines.slice(Math.max(0, lines.length - 12)).join("\n");
+		return d;
+	}
+
 	Component.onCompleted: {
 		var checkFile = toonui_exists.read();
 		freetoonExists = (checkFile.length > 0);
@@ -99,9 +133,8 @@ App {
 
 	// ---- Start / Install / Uninstall via TSC, with a watchdog ---------------
 	// The button can't run freetoon.sh itself: it writes "external-freetoon" to
-	// /var/volatile/tmp/tsc.command (= TSC's /tmp/tsc.command; /tmp is a symlink
-	// that is broken on some Toons, so never use /tmp) and TSC runs the script
-	// on its next round. TSC deletes
+	// /tmp/tsc.command (the path TSC reads, see tscCommand above) and TSC runs
+	// the script on its next round. TSC deletes
 	// that file after EVERY command it handles, so a request written while TSC
 	// is busy with another app's command (seen: a PostNL login of ~47 s) is
 	// thrown away and nothing happens. The watchdog below checks that the
@@ -149,12 +182,18 @@ App {
 		attempts++;
 		try {
 			if (actionKind === "uninstall") {
-				var a = new XMLHttpRequest();  // action file for freetoon.sh
-				a.open("PUT", "file:///var/volatile/tmp/freetoon.action");
-				a.send("uninstall");
+				// action file for freetoon.sh, which reads (and removes) both
+				var paths = ["file:///tmp/freetoon.action", "file:///var/volatile/tmp/freetoon.action"];
+				for (var i = 0; i < paths.length; i++) {
+					try {
+						var a = new XMLHttpRequest();
+						a.open("PUT", paths[i]);
+						a.send("uninstall");
+					} catch (e1) {}
+				}
 			}
 			var f = new XMLHttpRequest();
-			f.open("PUT", "file:///var/volatile/tmp/tsc.command");
+			f.open("PUT", "file:///tmp/tsc.command");
 			f.send("external-freetoon\n");
 		} catch (e) {}
 	}
@@ -214,7 +253,8 @@ App {
 				actionBusy = false;
 				actionFailed = true;
 				actionStatus = "ToonStore (TSC) heeft het Freetoon-script na 3 minuten nog niet gestart. " +
-				               "Probeer het opnieuw; blijft dit gebeuren, herstart dan de Toon.";
+				               "Probeer het opnieuw; blijft dit gebeuren, herstart dan de Toon. " +
+				               "'Bekijk log' toont wat TSC deed.";
 				return;
 			}
 			actionStatus = actionLabel() + " Wachten tot ToonStore (TSC) het script start... (" +
