@@ -19,14 +19,18 @@ trap '' HUP TERM INT
 have() { type "$1" >/dev/null 2>&1; }
 
 # Decouple from parent process group / session so init killing startqt does not kill this script
+# Always re-run through /bin/sh: ToonStore installs this file WITHOUT the
+# execute bit and TSC starts it as "/bin/sh freetoon.sh", so exec'ing "$0"
+# directly fails ("Permission denied") and the script died before its first
+# log line on every Toon that has setsid (TSC then just kept starting it).
 if [ "${SWITCH_DETACHED:-0}" != "1" ]; then
     export SWITCH_DETACHED=1
     if have setsid; then
-        exec setsid "$0" "$@"
+        exec setsid /bin/sh "$0" "$@"
     elif have busybox && busybox --list 2>/dev/null | grep -q '^setsid$'; then
-        exec busybox setsid "$0" "$@"
+        exec busybox setsid /bin/sh "$0" "$@"
     elif have python; then
-        exec python -c "import os, sys; os.setsid(); os.execv(sys.argv[1], sys.argv[1:])" "$0" "$@"
+        exec python -c "import os, sys; os.setsid(); os.execv('/bin/sh', ['/bin/sh'] + sys.argv[1:])" "$0" "$@"
     fi
 fi
 

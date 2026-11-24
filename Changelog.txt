@@ -1,3 +1,6 @@
+1.0.9
+- fix: on Toons with setsid the Freetoon script stopped straight away, before its first log line ("na 3 minuten nog niet gestart" while /var/log/tsc shows TSC starting freetoon.sh every 10 s). ToonStore installs freetoon.sh without the execute bit and the script re-started itself detached via setsid "$0"; it now re-starts through /bin/sh. freetoon.sh is also marked executable in git
+
 1.0.8
 - Start/Install/Uninstall write the command to /tmp/tsc.command again, the only path TSC reads (ToonStore, tscSettings and PostNL use it too). 1.0.7 wrote /var/volatile/tmp/tsc.command, which is the same file only when /tmp links to /var/volatile/tmp; where /tmp is a plain directory the request never reached TSC and the app gave up after 3 minutes
 - after such a time-out, 'Bekijk log' shows a diagnosis: whether the command is still waiting, a stray copy in /var/volatile/tmp, and the last lines of /var/log/tsc
